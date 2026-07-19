@@ -30,6 +30,8 @@ final class AppModel {
     var flashState: FlashState = .idle
     var showConfirmSheet = false
     var showImporter = false
+    var showFDAGate = false
+    var hasFullDiskAccess = false
     var pendingSimulate = false
 
     let helper = HelperManager()
@@ -58,6 +60,7 @@ final class AppModel {
 
     func start() {
         if Prefs.blockRemovableMounts { mountGuard.start() }
+        refreshFullDiskAccess()
         helper.refreshStatus()
         if let url = Prefs.restoreImage() { setImage(url, remember: false) }
         watcher.onChange = { [weak self] in
@@ -135,8 +138,21 @@ final class AppModel {
 
     // MARK: - Flash pipeline
 
+    @discardableResult
+    func refreshFullDiskAccess() -> Bool {
+        hasFullDiskAccess = FullDiskAccess.isGranted
+        return hasFullDiskAccess
+    }
+
     func requestFlash(simulate: Bool) {
         guard canFlash else { return }
+        // A real write needs Full Disk Access (simulate writes to /dev/null,
+        // which doesn't). Gate here with clear instructions rather than
+        // letting the helper fail deep in the pipeline.
+        if !simulate && !refreshFullDiskAccess() {
+            showFDAGate = true
+            return
+        }
         pendingSimulate = simulate
         showConfirmSheet = true
     }
@@ -153,7 +169,6 @@ final class AppModel {
 
         Task {
             do {
-                await requestRemovableVolumeAccess(disk)
                 try await helper.flash(
                     imageURL: url, info: info, bsdName: disk.bsdName,
                     verify: verify, simulate: simulate
@@ -167,9 +182,11 @@ final class AppModel {
                 let ns = error as NSError
                 if ns.domain == blazeHelperErrorDomain, ns.code == BlazeHelperError.cancelled.rawValue {
                     flashState = .idle
-                } else if ns.localizedDescription.contains("authopen") {
+                } else if ns.localizedDescription.contains("authopen") || ns.localizedDescription.contains("Operation not permitted") {
+                    // FDA was revoked between the gate and the write.
+                    hasFullDiskAccess = false
                     flashState = .failure(message:
-                        "macOS blocked access to the card. Grant it once in System Settings → Privacy & Security → Files & Folders → Blaze → Removable Volumes, then flash again.")
+                        "macOS blocked access to the card. Grant Blaze Full Disk Access in System Settings → Privacy & Security, then flash again.")
                 } else {
                     flashState = .failure(message: ns.localizedDescription)
                 }
@@ -181,35 +198,8 @@ final class AppModel {
         helper.cancelFlash()
     }
 
-    /// Raw-device access is TCC-gated by the Removable Volumes permission,
-    /// and the grant is recorded against this app's identity — which the
-    /// helper shares via AssociatedBundleIdentifiers. Only a foreground app
-    /// can make TCC show the one-time prompt, so touch the card's mounted
-    /// volume here before handing off to the helper. Blocks until the user
-    /// answers; harmless once granted (or if nothing is mounted).
     func setMountBlocking(_ enabled: Bool) {
         enabled ? mountGuard.start() : mountGuard.stop()
-    }
-
-    private nonisolated func requestRemovableVolumeAccess(_ disk: Disk) async {
-        let bsdName = disk.bsdName
-        var mounts = disk.mountPoints
-        let guardian = mountGuard
-        await Task.detached(priority: .userInitiated) {
-            // The card is usually unmounted (the guard keeps it that way),
-            // and TCC can only be asked through a real file access — so this
-            // deliberate mount runs with the guard suspended (the helper
-            // unmounts again before writing anyway).
-            guardian.whileSuspended {
-                if mounts.isEmpty {
-                    DiskEnumerator.mountDisk(bsdName)
-                    mounts = DiskEnumerator.mountPoints(of: bsdName)
-                }
-                for mount in mounts {
-                    _ = try? FileManager.default.contentsOfDirectory(atPath: mount)
-                }
-            }
-        }.value
     }
 
     func dismissResult() {

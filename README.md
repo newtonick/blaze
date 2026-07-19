@@ -6,7 +6,7 @@ A native macOS app for flashing disk images to SD and microSD cards. Pick an ima
   <img src="docs/images/main-window.png" width="480" alt="Blaze main window: a Raspberry Pi OS .img.xz selected, showing '524.9 MB compressed → 2.98 GB image' and its SHA-256, with the bootfs card preselected">
 </p>
 
-Blaze is a single-purpose system tool built entirely on Apple frameworks — SwiftUI, DiskArbitration, ServiceManagement, Security, Compression, CryptoKit — with zero third-party dependencies. Writing raw bytes to a disk device requires root, and Blaze's rule is **authorize once, never prompt again**: a privileged helper is installed through `SMAppService` behind a single admin prompt, and every flash after that — across relaunches and reboots — runs without asking for anything.
+Blaze is a single-purpose system tool built entirely on Apple frameworks — SwiftUI, DiskArbitration, ServiceManagement, Security, Compression, CryptoKit — with zero third-party dependencies. Writing raw bytes to a disk device requires root, so Blaze installs a privileged helper once through `SMAppService` (a single admin prompt), and needs Full Disk Access granted once in System Settings. After that one-time setup, every flash — across relaunches and reboots — runs without prompting.
 
 ## Features
 
@@ -49,9 +49,12 @@ Requirements: macOS 26, Xcode 26, and an Apple Development signing identity.
 
    The build produces `blaze.app` with the helper embedded in `Contents/MacOS/` and its launchd plist in `Contents/Library/LaunchDaemons/`.
 
-4. **First launch** — onboarding installs the privileged helper: one admin password prompt, never again.
+4. **First launch — onboarding, three steps:**
+   - **Install the helper** — one admin password prompt, never again.
+   - **Grant Full Disk Access** — onboarding deep-links you to System Settings → Privacy & Security → Full Disk Access; turn on **Blaze** and (if macOS offers) let it quit and reopen. This is the permission that lets the root helper reach the raw disk device — macOS TCC gates those even for root, and Blaze can only detect and link to this setting, since there is no API to prompt for it.
+   - **Learn ⌘O / ⌘↩.**
 
-5. **First flash** — macOS asks once to allow Blaze access to files on removable volumes (this permission is what gates raw device access; Full Disk Access is *not* needed). Click Allow and the write proceeds; subsequent flashes are prompt-free.
+5. **Flashing** — with the helper installed and Full Disk Access granted, flashing is prompt-free. If FDA is missing or later revoked, pressing Flash shows a sheet that explains it and deep-links to the right Settings pane; Simulate (⌥) needs no permissions since it writes to `/dev/null`. FDA status is also shown in Settings.
 
 ### Changing the app identity
 
@@ -63,7 +66,7 @@ The team ID and bundle IDs are load-bearing in five places that must move togeth
 4. **The launchd plist** — `BlazeHelper/<bundle-id>.plist`: its filename, `Label`, `MachServices` key, `BundleProgram` path, and `AssociatedBundleIdentifiers` (which is what lets the helper share the app's TCC grant).
 5. **`SMAppService.daemon(plistName:)`** in `HelperManager.swift` must match the plist filename.
 
-After an identity change, the first launch behaves like a fresh install: onboarding returns (new `UserDefaults` domain), the helper asks for its one admin approval under the new label, and the first flash re-asks the Removable Volumes permission (new TCC subject). The old identity's daemon lingers as a stale entry under System Settings → General → Login Items & Extensions — remove it there, or `sudo launchctl bootout system/<old-label>`.
+After an identity change, the first launch behaves like a fresh install: onboarding returns (new `UserDefaults` domain), the helper asks for its one admin approval under the new label, and Full Disk Access must be re-granted (TCC keys the grant to the bundle ID, so the new identity needs its own). The old identity's daemon lingers as a stale entry under System Settings → General → Login Items & Extensions — remove it there, or `sudo launchctl bootout system/<old-label>`.
 
 ### Development notes
 

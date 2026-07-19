@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// One-time, two panes: (1) install the helper — the single admin prompt
-/// Blaze ever shows, explained before it appears; (2) learn the two
-/// shortcuts that matter by using them.
+/// One-time, three panes: (1) install the helper — the single admin prompt
+/// Blaze ever shows; (2) grant Full Disk Access, deep-linked; (3) learn the
+/// two shortcuts that matter by using them.
 struct OnboardingSheet: View {
     @Environment(AppModel.self) private var model
     @Binding var done: Bool
@@ -12,13 +12,17 @@ struct OnboardingSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Group {
-                if page == 0 { helperPage } else { shortcutsPage }
+                switch page {
+                case 0: helperPage
+                case 1: fullDiskAccessPage
+                default: shortcutsPage
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.smooth(duration: 0.25), value: page)
 
             HStack(spacing: 5) {
-                ForEach(0..<2, id: \.self) { i in
+                ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .fill(i == page ? Color.accentColor : Color.secondary.opacity(0.3))
                         .frame(width: 6, height: 6)
@@ -51,6 +55,7 @@ struct OnboardingSheet: View {
                 Button("Continue") { page = 1 }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
+                    .onAppear { model.refreshFullDiskAccess() }
             case .requiresApproval:
                 Text("Approve Blaze in System Settings → Login Items to finish.")
                     .font(.system(size: 12))
@@ -77,6 +82,43 @@ struct OnboardingSheet: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
                 }
+            }
+            Spacer()
+        }
+    }
+
+    private var fullDiskAccessPage: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            Image(systemName: model.hasFullDiskAccess ? "checkmark.shield.fill" : "externaldrive.badge.exclamationmark")
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(model.hasFullDiskAccess ? Color.green : Color.accentColor)
+            Text("Full Disk Access")
+                .font(.title2.weight(.semibold))
+
+            if model.hasFullDiskAccess {
+                Text("Granted. Blaze can write to cards.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                Button("Continue") { page = 2 }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
+            } else {
+                Text("Writing to a card requires Full Disk Access — it's how macOS lets Blaze reach the raw disk, and the only permission Blaze needs. Turn on **Blaze** in System Settings, then come back.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 30)
+                HStack {
+                    Button("Open System Settings") { FullDiskAccess.openSettings() }
+                        .buttonStyle(.borderedProminent)
+                    Button("Recheck") { model.refreshFullDiskAccess() }
+                }
+                Button("Skip for now") { page = 2 }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
             }
             Spacer()
         }

@@ -33,9 +33,21 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            LabeledContent("Full Disk Access") {
+                if model.hasFullDiskAccess {
+                    Label("Granted", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else {
+                    Button("Grant in System Settings…") { FullDiskAccess.openSettings() }
+                }
+            }
         }
         .padding(20)
         .frame(width: 380)
-        .onAppear { model.helper.refreshStatus() }
+        .onAppear {
+            model.helper.refreshStatus()
+            model.refreshFullDiskAccess()
+        }
     }
 }

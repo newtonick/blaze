@@ -50,6 +50,9 @@ struct ContentView: View {
         .sheet(isPresented: $model.showConfirmSheet) {
             ConfirmSheet(verify: $verifyAfterWrite)
         }
+        .sheet(isPresented: $model.showFDAGate) {
+            FullDiskAccessSheet()
+        }
         .sheet(isPresented: .constant(!hasOnboarded)) {
             OnboardingSheet(done: $hasOnboarded)
         }
