@@ -12,7 +12,7 @@ import DiskArbitration
 /// actor.
 nonisolated final class MountGuard: @unchecked Sendable {
     private var session: DASession?
-    private let queue = DispatchQueue(label: "com.klockenga.blaze.mountguard")
+    private let queue = DispatchQueue(label: "dev.derivation48.blaze.mountguard")
     private let suspendLock = NSLock()
     private var suspendCount = 0
 

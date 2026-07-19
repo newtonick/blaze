@@ -4,7 +4,7 @@ import os.log
 /// Enumerates external physical whole disks via diskutil's plist output.
 /// Blocking — call off the main actor.
 nonisolated enum DiskEnumerator {
-    private static let log = Logger(subsystem: "com.klockenga.blaze", category: "disks")
+    private static let log = Logger(subsystem: "dev.derivation48.blaze", category: "disks")
 
     static func enumerate() -> [Disk] {
         guard let list = diskutilPlist(["list", "-plist", "external", "physical"]) else { return [] }

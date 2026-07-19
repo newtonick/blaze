@@ -39,7 +39,7 @@ Requirements: macOS 26, Xcode 26, and an Apple Development signing identity.
    open blaze.xcodeproj
    ```
 
-2. **Set your signing team** on both targets (`blaze` and `BlazeHelper`). If your team is not `27FVN4FG7D`, also update the pinned team ID in the two code-signing requirement strings — `BlazeHelper/PeerValidator.swift` (helper validates the app) and `blaze/Service/HelperManager.swift` (app validates the helper). These pins are the privilege boundary; don't remove them.
+2. **Set your signing team** on both targets (`blaze` and `BlazeHelper`). If your team or bundle IDs differ from `CNXH3K5L72` / `dev.derivation48.blaze(.helper)`, the identity is pinned in more places than build settings — see *Changing the app identity* below. These pins are the privilege boundary; don't remove them.
 
 3. Build and run (⌘R in Xcode, or):
 
@@ -53,8 +53,21 @@ Requirements: macOS 26, Xcode 26, and an Apple Development signing identity.
 
 5. **First flash** — macOS asks once to allow Blaze access to files on removable volumes (this permission is what gates raw device access; Full Disk Access is *not* needed). Click Allow and the write proceeds; subsequent flashes are prompt-free.
 
+### Changing the app identity
+
+The team ID and bundle IDs are load-bearing in five places that must move together — changing only the build settings leaves the app↔helper trust broken (each side rejects the other's signature):
+
+1. **Build settings** — `DEVELOPMENT_TEAM` and `PRODUCT_BUNDLE_IDENTIFIER` on both targets, plus the helper's `PRODUCT_NAME` and `OTHER_CODE_SIGN_FLAGS -i …` (the helper binary is named after its bundle ID).
+2. **Code-signing pins** — the requirement strings in `BlazeHelper/PeerValidator.swift` (helper validates the app) and `blaze/Service/HelperManager.swift` (app validates the helper) embed both the bundle ID and the team ID.
+3. **Mach service constant** — `blazeHelperMachServiceName` in `Shared/BlazeHelperProtocol.swift`.
+4. **The launchd plist** — `BlazeHelper/<bundle-id>.plist`: its filename, `Label`, `MachServices` key, `BundleProgram` path, and `AssociatedBundleIdentifiers` (which is what lets the helper share the app's TCC grant).
+5. **`SMAppService.daemon(plistName:)`** in `HelperManager.swift` must match the plist filename.
+
+After an identity change, the first launch behaves like a fresh install: onboarding returns (new `UserDefaults` domain), the helper asks for its one admin approval under the new label, and the first flash re-asks the Removable Volumes permission (new TCC subject). The old identity's daemon lingers as a stale entry under System Settings → General → Login Items & Extensions — remove it there, or `sudo launchctl bootout system/<old-label>`.
+
 ### Development notes
 
-- The helper binary supports a standalone gate check: `com.klockenga.blaze.helper --validate diskN` prints `ALLOW`/`REFUSE` with the reason, without XPC or a UI.
+- The helper binary supports a standalone gate check: `dev.derivation48.blaze.helper --validate diskN` prints `ALLOW`/`REFUSE` with the reason, without XPC or a UI.
 - The safest way to exercise the real write/verify path is a disk image: `hdiutil create -size 100m -layout NONE -o scratch -type UDIF && hdiutil attach -nomount scratch.dmg` yields a user-owned `/dev/rdiskN` the full pipeline can run against.
 - Helper changes deploy on the next launch after the daemon idle-exits (~15 s after the app quits). Protocol changes must bump `blazeHelperVersion` in `Shared/BlazeHelperProtocol.swift`, which triggers an automatic re-registration.
+- App and helper log to the `dev.derivation48.blaze` / `dev.derivation48.blaze.helper` subsystems: `log stream --level info --predicate 'subsystem BEGINSWITH "dev.derivation48.blaze"'` shows disk scoring, selection, helper lifecycle, and flash phase/failure detail.

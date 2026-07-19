@@ -9,7 +9,7 @@ import DiskArbitration
 final class MountBlocker {
     private var session: DASession?
     private var targetDisk = ""
-    private let queue = DispatchQueue(label: "com.klockenga.blaze.helper.mountblocker")
+    private let queue = DispatchQueue(label: "dev.derivation48.blaze.helper.mountblocker")
 
     private let approvalCallback: DADiskMountApprovalCallback = { disk, context in
         guard let context else { return nil }

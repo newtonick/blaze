@@ -34,7 +34,7 @@ final class AppModel {
 
     let helper = HelperManager()
 
-    private let log = Logger(subsystem: "com.klockenga.blaze", category: "model")
+    private let log = Logger(subsystem: "dev.derivation48.blaze", category: "model")
     private let watcher = DiskWatcher()
     private let mountGuard = MountGuard()
     private var hashTask: Task<Void, Never>?

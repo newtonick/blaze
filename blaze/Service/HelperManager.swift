@@ -32,8 +32,8 @@ final class HelperManager {
 
     var status: Status = .unknown
 
-    private let log = Logger(subsystem: "com.klockenga.blaze", category: "helper")
-    private let service = SMAppService.daemon(plistName: "com.klockenga.blaze.helper.plist")
+    private let log = Logger(subsystem: "dev.derivation48.blaze", category: "helper")
+    private let service = SMAppService.daemon(plistName: "dev.derivation48.blaze.helper.plist")
     private var connection: NSXPCConnection?
     private var progressReceiver: ProgressReceiver?
 
@@ -99,7 +99,7 @@ final class HelperManager {
         // Trust is mutual: the helper validates us; we require the helper's
         // exact identity before sending it anything.
         c.setCodeSigningRequirement(
-            #"anchor apple generic and identifier "com.klockenga.blaze.helper" and certificate leaf[subject.OU] = "27FVN4FG7D""#)
+            #"anchor apple generic and identifier "dev.derivation48.blaze.helper" and certificate leaf[subject.OU] = "CNXH3K5L72""#)
         c.invalidationHandler = { [weak self] in
             Task { @MainActor [weak self] in self?.connection = nil }
         }

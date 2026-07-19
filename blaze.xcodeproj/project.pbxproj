@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B1A2C0DE000000000000A00D /* com.klockenga.blaze.helper in Embed Helper */ = {isa = PBXBuildFile; fileRef = B1A2C0DE000000000000A001 /* com.klockenga.blaze.helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		B1A2C0DE000000000000A010 /* com.klockenga.blaze.helper.plist in Copy LaunchDaemon plist */ = {isa = PBXBuildFile; fileRef = B1A2C0DE000000000000A00E /* com.klockenga.blaze.helper.plist */; };
+		B1A2C0DE000000000000A00D /* dev.derivation48.blaze.helper in Embed Helper */ = {isa = PBXBuildFile; fileRef = B1A2C0DE000000000000A001 /* dev.derivation48.blaze.helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		B1A2C0DE000000000000A010 /* dev.derivation48.blaze.helper.plist in Copy LaunchDaemon plist */ = {isa = PBXBuildFile; fileRef = B1A2C0DE000000000000A00E /* dev.derivation48.blaze.helper.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -28,7 +28,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 6;
 			files = (
-				B1A2C0DE000000000000A00D /* com.klockenga.blaze.helper in Embed Helper */,
+				B1A2C0DE000000000000A00D /* dev.derivation48.blaze.helper in Embed Helper */,
 			);
 			name = "Embed Helper";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -39,7 +39,7 @@
 			dstPath = Contents/Library/LaunchDaemons;
 			dstSubfolderSpec = 1;
 			files = (
-				B1A2C0DE000000000000A010 /* com.klockenga.blaze.helper.plist in Copy LaunchDaemon plist */,
+				B1A2C0DE000000000000A010 /* dev.derivation48.blaze.helper.plist in Copy LaunchDaemon plist */,
 			);
 			name = "Copy LaunchDaemon plist";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -48,8 +48,8 @@
 
 /* Begin PBXFileReference section */
 		3CFC34B5300C80F10056FC2F /* Blaze.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Blaze.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B1A2C0DE000000000000A001 /* com.klockenga.blaze.helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.klockenga.blaze.helper; sourceTree = BUILT_PRODUCTS_DIR; };
-		B1A2C0DE000000000000A00E /* com.klockenga.blaze.helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = com.klockenga.blaze.helper.plist; path = BlazeHelper/com.klockenga.blaze.helper.plist; sourceTree = "<group>"; };
+		B1A2C0DE000000000000A001 /* dev.derivation48.blaze.helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.derivation48.blaze.helper; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1A2C0DE000000000000A00E /* dev.derivation48.blaze.helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = dev.derivation48.blaze.helper.plist; path = BlazeHelper/dev.derivation48.blaze.helper.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -91,7 +91,7 @@
 		3C0A8114300D444900073084 /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
-				B1A2C0DE000000000000A00E /* com.klockenga.blaze.helper.plist */,
+				B1A2C0DE000000000000A00E /* dev.derivation48.blaze.helper.plist */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -111,7 +111,7 @@
 			isa = PBXGroup;
 			children = (
 				3CFC34B5300C80F10056FC2F /* Blaze.app */,
-				B1A2C0DE000000000000A001 /* com.klockenga.blaze.helper */,
+				B1A2C0DE000000000000A001 /* dev.derivation48.blaze.helper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -164,7 +164,7 @@
 			packageProductDependencies = (
 			);
 			productName = BlazeHelper;
-			productReference = B1A2C0DE000000000000A001 /* com.klockenga.blaze.helper */;
+			productReference = B1A2C0DE000000000000A001 /* dev.derivation48.blaze.helper */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -273,7 +273,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 27FVN4FG7D;
+				DEVELOPMENT_TEAM = CNXH3K5L72;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -337,7 +337,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 27FVN4FG7D;
+				DEVELOPMENT_TEAM = CNXH3K5L72;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -432,9 +432,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = CNXH3K5L72;
 				ENABLE_HARDENED_RUNTIME = YES;
-				OTHER_CODE_SIGN_FLAGS = "-i com.klockenga.blaze.helper";
+				OTHER_CODE_SIGN_FLAGS = "-i dev.derivation48.blaze.helper";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.derivation48.blaze.helper;
-				PRODUCT_NAME = com.klockenga.blaze.helper;
+				PRODUCT_NAME = dev.derivation48.blaze.helper;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -446,9 +446,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = CNXH3K5L72;
 				ENABLE_HARDENED_RUNTIME = YES;
-				OTHER_CODE_SIGN_FLAGS = "-i com.klockenga.blaze.helper";
+				OTHER_CODE_SIGN_FLAGS = "-i dev.derivation48.blaze.helper";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.derivation48.blaze.helper;
-				PRODUCT_NAME = com.klockenga.blaze.helper;
+				PRODUCT_NAME = dev.derivation48.blaze.helper;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 			};

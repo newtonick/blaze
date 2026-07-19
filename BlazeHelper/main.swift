@@ -1,9 +1,9 @@
 import Foundation
 import os.log
 
-let log = Logger(subsystem: "com.klockenga.blaze.helper", category: "daemon")
+let log = Logger(subsystem: "dev.derivation48.blaze.helper", category: "daemon")
 
-// Debug affordance: `com.klockenga.blaze.helper --validate diskN` runs the
+// Debug affordance: `dev.derivation48.blaze.helper --validate diskN` runs the
 // safety gates against a device and exits — lets the refusal paths be tested
 // directly, without XPC or a UI.
 if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--validate" {

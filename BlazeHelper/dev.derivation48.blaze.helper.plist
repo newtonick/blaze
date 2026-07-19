@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.klockenga.blaze.helper</string>
+	<string>dev.derivation48.blaze.helper</string>
 	<key>BundleProgram</key>
-	<string>Contents/MacOS/com.klockenga.blaze.helper</string>
+	<string>Contents/MacOS/dev.derivation48.blaze.helper</string>
 	<key>MachServices</key>
 	<dict>
-		<key>com.klockenga.blaze.helper</key>
+		<key>dev.derivation48.blaze.helper</key>
 		<true/>
 	</dict>
 	<key>AssociatedBundleIdentifiers</key>
 	<array>
-		<string>com.klockenga.blaze</string>
+		<string>dev.derivation48.blaze</string>
 	</array>
 </dict>
 </plist>

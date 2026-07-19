@@ -2,7 +2,7 @@ import Foundation
 import os.log
 
 final class HelperService: NSObject, NSXPCListenerDelegate, BlazeHelperProtocol {
-    private let log = Logger(subsystem: "com.klockenga.blaze.helper", category: "service")
+    private let log = Logger(subsystem: "dev.derivation48.blaze.helper", category: "service")
     private let flasher = Flasher()
     private let stateLock = NSLock()
     private var connectionCount = 0

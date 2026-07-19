@@ -6,5 +6,5 @@ import Foundation
 /// satisfying it are rejected by XPC before they reach us.
 enum PeerValidator {
     static let requirement =
-        #"anchor apple generic and identifier "com.klockenga.blaze" and certificate leaf[subject.OU] = "27FVN4FG7D""#
+        #"anchor apple generic and identifier "dev.derivation48.blaze" and certificate leaf[subject.OU] = "CNXH3K5L72""#
 }

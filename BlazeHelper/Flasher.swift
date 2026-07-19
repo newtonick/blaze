@@ -6,8 +6,8 @@ import os.log
 /// target is re-derived here — the app's UI filtering is convenience only,
 /// and a UI bug must not be able to overwrite the boot drive.
 final class Flasher {
-    private let log = Logger(subsystem: "com.klockenga.blaze.helper", category: "flasher")
-    private let queue = DispatchQueue(label: "com.klockenga.blaze.helper.flash")
+    private let log = Logger(subsystem: "dev.derivation48.blaze.helper", category: "flasher")
+    private let queue = DispatchQueue(label: "dev.derivation48.blaze.helper.flash")
     private let stateLock = NSLock()
     private var running = false
     private var cancelled = false

@@ -8,7 +8,7 @@ nonisolated final class DiskWatcher {
     var onChange: @Sendable () -> Void = {}
 
     private var session: DASession?
-    private let queue = DispatchQueue(label: "com.klockenga.blaze.diskwatcher")
+    private let queue = DispatchQueue(label: "dev.derivation48.blaze.diskwatcher")
     private var pending: DispatchWorkItem?
 
     func start() {
