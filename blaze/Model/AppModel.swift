@@ -62,7 +62,11 @@ final class AppModel {
         if Prefs.blockRemovableMounts { mountGuard.start() }
         refreshFullDiskAccess()
         helper.refreshStatus()
-        if let url = Prefs.restoreImage() { setImage(url, remember: false) }
+        // Enumeration shells out to diskutil, which reads mounted external
+        // volumes — without FDA that surfaces a "removable volume" prompt
+        // attributed to Blaze. Touch no disks and restore no image until FDA
+        // is granted, so FDA is the single permission the user ever sees.
+        if hasFullDiskAccess, let url = Prefs.restoreImage() { setImage(url, remember: false) }
         watcher.onChange = { [weak self] in
             Task { @MainActor [weak self] in await self?.rescanDisks() }
         }
@@ -117,6 +121,14 @@ final class AppModel {
     // MARK: - Disks
 
     func rescanDisks() async {
+        // diskutil enumeration reads mounted external volumes; without FDA
+        // that prompts for removable access. Show nothing until FDA is
+        // granted — the picker guides the user there instead.
+        guard hasFullDiskAccess else {
+            disks = []
+            selectedDiskID = nil
+            return
+        }
         let found = await Task.detached(priority: .userInitiated) { DiskEnumerator.enumerate() }.value
         disks = found
 
@@ -140,7 +152,14 @@ final class AppModel {
 
     @discardableResult
     func refreshFullDiskAccess() -> Bool {
+        let was = hasFullDiskAccess
         hasFullDiskAccess = FullDiskAccess.isGranted
+        // The moment FDA is granted, populate the picker and restore the last
+        // image — the things we held back to avoid a pre-FDA removable prompt.
+        if hasFullDiskAccess && !was {
+            if imageURL == nil, let url = Prefs.restoreImage() { setImage(url, remember: false) }
+            Task { await rescanDisks() }
+        }
         return hasFullDiskAccess
     }
 
