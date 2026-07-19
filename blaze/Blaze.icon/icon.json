@@ -1,0 +1,49 @@
+{
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "02-Blaze-Flame-and-Data-Streaks.svg",
+          "name" : "flame-and-data-streaks",
+          "position" : {
+            "scale" : 0.75,
+            "translation-in-points" : [
+              -15.59765625,
+              15.01171875
+            ]
+          }
+        },
+        {
+          "image-name" : "01-microSD-Card 2.svg",
+          "name" : "01-microSD-Card 2"
+        },
+        {
+          "blend-mode" : "normal",
+          "fill" : "automatic",
+          "image-name-specializations" : [
+            {
+              "value" : "00-Background-Light.svg"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "00-Background-Dark.svg"
+            }
+          ],
+          "name" : "background"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

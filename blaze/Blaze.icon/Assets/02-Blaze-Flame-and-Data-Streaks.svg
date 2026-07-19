@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="fire" x1="0.15" y1="0.15" x2="0.85" y2="0.9">
+    <stop offset="0" stop-color="#FFF08A"/>
+    <stop offset="0.22" stop-color="#FFB000"/>
+    <stop offset="0.58" stop-color="#FF5A00"/>
+    <stop offset="1" stop-color="#C92A00"/>
+  </linearGradient>
+  <linearGradient id="inner" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FFF7B0"/>
+    <stop offset="0.45" stop-color="#FFC400"/>
+    <stop offset="1" stop-color="#FF6A00"/>
+  </linearGradient>
+  <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+    <feGaussianBlur stdDeviation="16" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="smallGlow" x="-40%" y="-40%" width="180%" height="180%">
+    <feGaussianBlur stdDeviation="5" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>
+<g opacity="0.95" filter="url(#smallGlow)" stroke-linecap="round">
+  <line x1="145" y1="397" x2="487" y2="397" stroke="#FF8A00" stroke-width="13"/>
+  <line x1="208" y1="447" x2="516" y2="447" stroke="#FFC533" stroke-width="22"/>
+  <line x1="126" y1="503" x2="508" y2="503" stroke="#FF6A00" stroke-width="7"/>
+  <line x1="170" y1="553" x2="468" y2="553" stroke="#40CFFF" stroke-width="16"/>
+  <line x1="220" y1="605" x2="526" y2="605" stroke="#FFD25B" stroke-width="15"/>
+  <line x1="282" y1="655" x2="564" y2="655" stroke="#FF9200" stroke-width="10"/>
+  <rect x="472" y="527" width="24" height="24" rx="4" fill="#FFC400"/>
+  <rect x="526" y="552" width="28" height="28" rx="4" fill="#FF7A00"/>
+  <rect x="466" y="586" width="20" height="20" rx="3" fill="#54C6FF"/>
+</g>
+<g filter="url(#glow)">
+  <path d="M391 730 C478 684 484 605 461 542 C435 469 486 396 565 300 C690 378 737 482 681 581 C747 551 792 499 817 420 C904 532 898 682 792 760 C694 834 516 833 391 730 Z" fill="url(#fire)" stroke="#FFF06A" stroke-width="13" stroke-linejoin="round"/>
+  <path d="M542 594 C598 546 610 485 587 421 C656 476 666 551 628 614 C684 592 728 557 764 500 C788 583 760 670 688 716 C633 751 553 754 484 727 C550 698 575 647 542 594 Z" fill="url(#inner)" opacity="0.90"/>
+  <path d="M400 724 C489 674 500 598 477 535 C459 485 484 428 547 349" fill="none" stroke="#FFF7A8" stroke-width="8" stroke-linecap="round" opacity="0.92"/>
+</g>
+</svg>

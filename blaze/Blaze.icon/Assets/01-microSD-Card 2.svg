@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#4C5566"/>
+    <stop offset="0.45" stop-color="#293241"/>
+    <stop offset="1" stop-color="#151D2A"/>
+  </linearGradient>
+  <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#EAF2FF"/>
+    <stop offset="0.22" stop-color="#77859A"/>
+    <stop offset="0.55" stop-color="#DCE8F7"/>
+    <stop offset="1" stop-color="#4F5D72"/>
+  </linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFF2A6"/>
+    <stop offset="0.35" stop-color="#FFC54A"/>
+    <stop offset="1" stop-color="#C97900"/>
+  </linearGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+    <feDropShadow dx="0" dy="26" stdDeviation="24" flood-color="#000814" flood-opacity="0.42"/>
+  </filter>
+</defs>
+<g filter="url(#shadow)">
+  <path d="M350 170 H742 Q774 170 798 194 L873 269 V535 L833 575 V686 L883 736 V812 H350 Q314 812 314 776 V524 Q314 496 338 474 Q314 453 314 425 V206 Q314 170 350 170 Z" fill="url(#rim)"/>
+  <path d="M360 186 H735 Q764 186 785 207 L856 278 V527 L816 567 V694 L866 744 V794 H360 Q334 794 334 768 V530 Q334 499 359 476 Q334 453 334 422 V212 Q334 186 360 186 Z" fill="url(#body)" stroke="#AAB8CB" stroke-width="3"/>
+  <path d="M366 201 H733 Q752 201 767 216 L840 289" fill="none" stroke="#D6E4F5" stroke-opacity="0.58" stroke-width="5" stroke-linecap="round"/>
+  <path d="M350 782 H850" fill="none" stroke="#0A1019" stroke-opacity="0.75" stroke-width="4"/>
+  <g stroke="#7A4500" stroke-width="5">
+    <rect x="382" y="222" width="48" height="118" rx="10" fill="url(#gold)"/>
+    <rect x="448" y="222" width="48" height="118" rx="10" fill="url(#gold)"/>
+    <rect x="514" y="222" width="48" height="118" rx="10" fill="url(#gold)"/>
+    <rect x="580" y="222" width="48" height="118" rx="10" fill="url(#gold)"/>
+    <rect x="646" y="222" width="48" height="118" rx="10" fill="url(#gold)"/>
+    <rect x="712" y="222" width="48" height="118" rx="10" fill="url(#gold)"/>
+  </g>
+  <g fill="none" stroke="#FFF7C6" stroke-width="3" opacity="0.72">
+    <line x1="390" y1="232" x2="390" y2="328"/><line x1="456" y1="232" x2="456" y2="328"/>
+    <line x1="522" y1="232" x2="522" y2="328"/><line x1="588" y1="232" x2="588" y2="328"/>
+    <line x1="654" y1="232" x2="654" y2="328"/><line x1="720" y1="232" x2="720" y2="328"/>
+  </g>
+</g>
+</svg>
