@@ -8,6 +8,7 @@ struct BlazeApp: App {
         WindowGroup {
             ContentView()
                 .environment(model)
+                .tint(.blaze)
                 .onAppear { model.start() }
         }
         .windowStyle(.hiddenTitleBar)
@@ -25,6 +26,7 @@ struct BlazeApp: App {
         Settings {
             SettingsView()
                 .environment(model)
+                .tint(.blaze)
         }
     }
 }

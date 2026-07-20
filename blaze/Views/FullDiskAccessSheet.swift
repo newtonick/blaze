@@ -10,7 +10,7 @@ struct FullDiskAccessSheet: View {
         VStack(spacing: 16) {
             Image(systemName: "lock.shield")
                 .font(.system(size: 32))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.blaze)
 
             Text("Full Disk Access needed")
                 .font(.title3.weight(.semibold))
@@ -51,7 +51,7 @@ struct FullDiskAccessSheet: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 18, height: 18)
-                .background(Circle().fill(Color.accentColor))
+                .background(Circle().fill(Color.blaze))
             Text(text)
                 .font(.system(size: 12))
         }

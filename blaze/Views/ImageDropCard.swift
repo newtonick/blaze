@@ -23,7 +23,7 @@ struct ImageDropCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(dropTargeted ? Color.accentColor : Color.secondary.opacity(0.25),
+                .strokeBorder(dropTargeted ? Color.blaze : Color.secondary.opacity(0.25),
                               style: StrokeStyle(lineWidth: dropTargeted ? 2 : 1,
                                                  dash: model.imageURL == nil ? [6, 4] : []))
         )
@@ -34,7 +34,7 @@ struct ImageDropCard: View {
         VStack(spacing: 10) {
             Image(systemName: "arrow.down.document")
                 .font(.system(size: 34, weight: .light))
-                .foregroundStyle(dropTargeted ? Color.accentColor : .secondary)
+                .foregroundStyle(dropTargeted ? Color.blaze : .secondary)
             Text("Drop an .img here, or ⌘O")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
@@ -49,7 +49,7 @@ struct ImageDropCard: View {
         HStack(spacing: 14) {
             Image(systemName: "opticaldiscdrive")
                 .font(.system(size: 28, weight: .light))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.blaze)
                 .frame(width: 44)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -110,7 +110,7 @@ struct ImageDropCard: View {
                 } label: {
                     Text(copiedHash ? "Copied" : compact)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(copiedHash ? Color.accentColor : .secondary)
+                        .foregroundStyle(copiedHash ? Color.blaze : .secondary)
                         .contentTransition(.opacity)
                 }
                 .buttonStyle(.plain)

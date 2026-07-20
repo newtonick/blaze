@@ -88,8 +88,15 @@ final class Flasher {
         guard desc[kDADiskDescriptionMediaWholeKey as String] as? Bool == true else {
             throw Self.error(.notWholeDisk, "\(bsdName) is not a whole disk.")
         }
-        if desc[kDADiskDescriptionDeviceInternalKey as String] as? Bool == true {
-            throw Self.error(.internalDisk, "\(bsdName) is an internal disk.")
+        // Reject only FIXED internal disks (the boot NVMe): Internal and
+        // non-removable. A card in the built-in SD slot is also Internal —
+        // the slot is on the internal bus — but is removable, so it must be
+        // allowed. The startup-disk check below is the authoritative guard
+        // and rejects whatever backs "/" regardless of these flags.
+        let isInternal = desc[kDADiskDescriptionDeviceInternalKey as String] as? Bool == true
+        let isRemovable = desc[kDADiskDescriptionMediaRemovableKey as String] as? Bool == true
+        if isInternal && !isRemovable {
+            throw Self.error(.internalDisk, "\(bsdName) is a fixed internal disk.")
         }
         if try bootDisks().contains(bsdName) {
             throw Self.error(.bootDisk, "\(bsdName) backs the startup volume.")

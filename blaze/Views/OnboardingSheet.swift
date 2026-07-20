@@ -24,7 +24,7 @@ struct OnboardingSheet: View {
             HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
-                        .fill(i == page ? Color.accentColor : Color.secondary.opacity(0.3))
+                        .fill(i == page ? Color.blaze : Color.secondary.opacity(0.3))
                         .frame(width: 6, height: 6)
                 }
             }
@@ -39,7 +39,7 @@ struct OnboardingSheet: View {
             Spacer()
             Image(systemName: "lock.shield")
                 .font(.system(size: 40, weight: .light))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.blaze)
             Text("One-time setup")
                 .font(.title2.weight(.semibold))
             Text("Writing an SD card needs administrator access. Blaze installs a small helper once — you'll see a single password prompt, and never again. No prompts per flash, no prompts after reboot.")
@@ -92,7 +92,7 @@ struct OnboardingSheet: View {
             Spacer()
             Image(systemName: model.hasFullDiskAccess ? "checkmark.shield.fill" : "externaldrive.badge.exclamationmark")
                 .font(.system(size: 40, weight: .light))
-                .foregroundStyle(model.hasFullDiskAccess ? Color.green : Color.accentColor)
+                .foregroundStyle(model.hasFullDiskAccess ? Color.green : Color.blaze)
             Text("Full Disk Access")
                 .font(.title2.weight(.semibold))
 
@@ -129,7 +129,7 @@ struct OnboardingSheet: View {
             Spacer()
             Image(systemName: "keyboard")
                 .font(.system(size: 40, weight: .light))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.blaze)
             Text("Two keys to remember")
                 .font(.title2.weight(.semibold))
 

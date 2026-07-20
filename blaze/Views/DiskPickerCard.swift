@@ -80,7 +80,7 @@ struct DiskPickerCard: View {
             HStack(spacing: 10) {
                 Image(systemName: disk.score > 0 ? "sdcard.fill" : "externaldrive")
                     .font(.system(size: 16))
-                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                    .foregroundStyle(selected ? Color.blaze : .secondary)
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(disk.displayName)
@@ -93,7 +93,7 @@ struct DiskPickerCard: View {
                 Spacer()
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.blaze)
                 }
             }
             .padding(.horizontal, 10)
@@ -101,7 +101,7 @@ struct DiskPickerCard: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(selected ? Color.accentColor.opacity(0.12) : .clear)
+                    .fill(selected ? Color.blaze.opacity(0.12) : .clear)
             )
         }
         .buttonStyle(.plain)

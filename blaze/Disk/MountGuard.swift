@@ -2,10 +2,10 @@ import Foundation
 import DiskArbitration
 
 /// While Blaze runs (and the preference is on), dissents every mount of
-/// removable physical media system-wide — cards and USB sticks stay
-/// unmounted, so macOS never touches them. Internal disks, external
-/// non-removable drives, and disk images are unaffected, and everything
-/// returns to normal the moment Blaze quits.
+/// removable physical media system-wide — cards (USB reader or built-in SD
+/// slot) and USB sticks stay unmounted, so macOS never touches them. The
+/// boot disk, external non-removable drives, and disk images are unaffected,
+/// and everything returns to normal the moment Blaze quits.
 ///
 /// @unchecked Sendable: `suspendCount` is lock-guarded and read from the DA
 /// callback queue; `session` is only touched from start/stop on the main
@@ -23,9 +23,12 @@ nonisolated final class MountGuard: @unchecked Sendable {
         let suspended = guardian.suspendCount > 0
         guardian.suspendLock.unlock()
         if suspended { return nil }
+        // Block any removable medium — USB reader/stick or a card in the
+        // built-in SD slot (which is internal-bus but removable). The boot
+        // disk and external SSD/HDD enclosures are non-removable so they
+        // never match; disk images are excluded explicitly.
         guard let desc = DADiskCopyDescription(disk) as? [String: Any],
               desc[kDADiskDescriptionMediaRemovableKey as String] as? Bool == true,
-              desc[kDADiskDescriptionDeviceInternalKey as String] as? Bool != true,
               (desc[kDADiskDescriptionDeviceProtocolKey as String] as? String) != "Virtual Interface",
               (desc[kDADiskDescriptionDeviceModelKey as String] as? String) != "Disk Image"
         else { return nil }

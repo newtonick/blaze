@@ -9,12 +9,15 @@ nonisolated enum SDHeuristic {
     /// Word-bounded: "SD" must be a standalone token so model numbers that
     /// merely contain the letters (…P3PSSD8) don't score as card readers.
     static let namePattern = try! NSRegularExpression(
-        pattern: #"\b(SD|SDHC|SDXC)\b|Card *Reader|SanDisk|Transcend|Lexar"#,
+        pattern: #"\b(SD|SDHC|SDXC)\b|Card *Reader|Built.?In .*Reader|Apple .*Reader|SanDisk|Transcend|Lexar"#,
         options: [.caseInsensitive])
 
-    /// Returns nil for disks that must not be offered at all.
+    /// Returns nil for disks that must not be offered at all. A card in the
+    /// built-in SD slot reports Internal=true (the slot is on the internal
+    /// bus) but is genuinely removable — exclude only fixed internal disks
+    /// (the boot NVMe), which are Internal and non-removable.
     static func score(_ disk: Disk) -> Int? {
-        guard !disk.isInternal else { return nil }
+        guard !(disk.isInternal && !disk.removable) else { return nil }
 
         var score = 0
         if disk.removable { score += 50 }

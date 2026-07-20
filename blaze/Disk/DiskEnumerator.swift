@@ -7,7 +7,11 @@ nonisolated enum DiskEnumerator {
     private static let log = Logger(subsystem: "dev.derivation48.blaze", category: "disks")
 
     static func enumerate() -> [Disk] {
-        guard let list = diskutilPlist(["list", "-plist", "external", "physical"]) else { return [] }
+        // All physical disks, not just external: the built-in SD slot on
+        // MacBook Air/Pro is on the internal bus, so its cards report
+        // Internal=true and never appear under "external". The Removable
+        // filter below excludes the boot NVMe and fixed external drives.
+        guard let list = diskutilPlist(["list", "-plist", "physical"]) else { return [] }
         let wholeDisks = list["WholeDisks"] as? [String] ?? []
 
         // Volume names come from the list plist, keyed by whole disk.
@@ -42,11 +46,12 @@ nonisolated enum DiskEnumerator {
                 isInternal: info["Internal"] as? Bool ?? false,
                 volumeNames: volumesByDisk[bsdName] ?? [],
                 mountPoints: mountsByDisk[bsdName] ?? [])
-            // Fixed external drives (NVMe/SSD/HDD enclosures) report
-            // Removable=false; SD/microSD readers and sticks report true.
+            // Fixed drives — the internal boot NVMe and external NVMe/SSD/HDD
+            // enclosures — report Removable=false. SD/microSD cards report
+            // true whether they sit in a USB reader or the built-in slot.
             // Only removable media belongs in a card picker.
             guard disk.removable else {
-                log.info("hiding non-removable external disk \(bsdName, privacy: .public) (\(disk.mediaName, privacy: .public))")
+                log.info("hiding non-removable disk \(bsdName, privacy: .public) (\(disk.mediaName, privacy: .public))")
                 continue
             }
             guard let score = SDHeuristic.score(disk) else {

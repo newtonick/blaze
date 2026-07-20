@@ -3,7 +3,7 @@ import Foundation
 /// Bump whenever the XPC contract or flash pipeline changes. The app compares
 /// this against the installed helper's reported version on connect and
 /// re-registers the daemon on mismatch.
-public let blazeHelperVersion = "1.1.1"
+public let blazeHelperVersion = "1.2.0"
 
 public let blazeHelperMachServiceName = "dev.derivation48.blaze.helper"
 

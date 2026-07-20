@@ -14,7 +14,7 @@ struct FlashButton: View {
                 model.requestFlash(simulate: simulate)
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: simulate ? "wand.and.sparkles" : "bolt.fill")
+                    Image(systemName: simulate ? "wand.and.sparkles" : "flame.fill")
                     Text(simulate ? "Simulate (no write)" : "Flash")
                         .fontWeight(.semibold)
                 }
@@ -23,7 +23,7 @@ struct FlashButton: View {
                 .padding(.vertical, 10)
             }
             .buttonStyle(.borderedProminent)
-            .tint(simulate ? .indigo : .accentColor)
+            .tint(simulate ? .indigo : .blaze)
             .controlSize(.large)
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(!model.canFlash)
