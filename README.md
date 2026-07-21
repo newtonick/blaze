@@ -6,7 +6,7 @@ A native macOS app for flashing disk images to SD and microSD cards. Pick an ima
   <img src="docs/images/main-window.png" width="440" alt="Blaze main window: a SeedSigner OS image selected with its SHA-256, and three cards listed — a built-in-slot card and two USB-reader cards — with one preselected and an amber Flash button">
 </p>
 
-Blaze is a single-purpose system tool built entirely on Apple frameworks — SwiftUI, DiskArbitration, ServiceManagement, Security, Compression, CryptoKit — with zero third-party dependencies. Writing raw bytes to a disk device requires root, so Blaze installs a privileged helper once through `SMAppService` (a single admin prompt), and needs Full Disk Access granted once in System Settings. After that one-time setup, every flash — across relaunches and reboots — runs without prompting.
+Blaze is a single-purpose system tool built entirely on Apple frameworks — SwiftUI, DiskArbitration, ServiceManagement, Security, Compression, CryptoKit — with zero third-party dependencies. Writing raw bytes to a disk device requires root, so Blaze installs a privileged helper once through `SMAppService` (a single admin prompt), and asks once for removable-volume access and Full Disk Access. After that one-time setup, every flash — across relaunches and reboots — runs without prompting.
 
 ## Features
 
@@ -49,12 +49,13 @@ Requirements: macOS 26, Xcode 26, and an Apple Development signing identity.
 
    The build produces `blaze.app` with the helper embedded in `Contents/MacOS/` and its launchd plist in `Contents/Library/LaunchDaemons/`.
 
-4. **First launch — onboarding, three steps:**
-   - **Install the helper** — one admin password prompt, never again.
-   - **Grant Full Disk Access** — onboarding deep-links you to System Settings → Privacy & Security → Full Disk Access; turn on **Blaze** and (if macOS offers) let it quit and reopen. This is the permission that lets the root helper reach the raw disk device — macOS TCC gates those even for root, and Blaze can only detect and link to this setting, since there is no API to prompt for it.
+4. **First launch — onboarding, four steps:**
+   - **Install the helper** — one admin password prompt, never again. Nothing is registered and no Settings pane opens until you press the button.
+   - **Grant card access** — insert a card and click **Allow** when macOS asks Blaze to access files on a removable volume. The pane watches for the card and for the grant, so it advances on its own. This is the permission that matters for writing, and macOS only offers it when the app reads a mounted removable volume — which is why a card has to be present, and why Blaze doesn't block auto-mount until setup is done.
+   - **Grant Full Disk Access** — deep-links to System Settings → Privacy & Security → Full Disk Access. Requested after card access, never before: FDA silently permits removable-volume reads, which would suppress the prompt above.
    - **Learn ⌘O / ⌘↩.**
 
-5. **Flashing** — with the helper installed and Full Disk Access granted, flashing is prompt-free. If FDA is missing or later revoked, pressing Flash shows a sheet that explains it and deep-links to the right Settings pane; Simulate (⌥) needs no permissions since it writes to `/dev/null`. FDA status is also shown in Settings.
+5. **Flashing** — prompt-free once set up. The app opens the card's raw device and passes the descriptor to the root helper over XPC, the same way it passes the image file: TCC grants belong to the app the user granted them to, and a root daemon cannot inherit one or ask for its own. The helper unmounts the card and hands over its device node for the one flash, re-validates the target, and refuses any descriptor that isn't the disk it just checked. Simulate (⌥) needs no permissions since it writes to `/dev/null`.
 
 ### Changing the app identity
 
@@ -63,7 +64,7 @@ The team ID and bundle IDs are load-bearing in five places that must move togeth
 1. **Build settings** — `DEVELOPMENT_TEAM` and `PRODUCT_BUNDLE_IDENTIFIER` on both targets, plus the helper's `PRODUCT_NAME` and `OTHER_CODE_SIGN_FLAGS -i …` (the helper binary is named after its bundle ID).
 2. **Code-signing pins** — the requirement strings in `BlazeHelper/PeerValidator.swift` (helper validates the app) and `blaze/Service/HelperManager.swift` (app validates the helper) embed both the bundle ID and the team ID.
 3. **Mach service constant** — `blazeHelperMachServiceName` in `Shared/BlazeHelperProtocol.swift`.
-4. **The launchd plist** — `BlazeHelper/<bundle-id>.plist`: its filename, `Label`, `MachServices` key, `BundleProgram` path, and `AssociatedBundleIdentifiers` (which is what lets the helper share the app's TCC grant).
+4. **The launchd plist** — `BlazeHelper/<bundle-id>.plist`: its filename, `Label`, `MachServices` key, `BundleProgram` path, and `AssociatedBundleIdentifiers` (which is what shows the helper under the app's name in Login Items — it does *not* share the app's TCC grant; nothing does, which is why the app opens the card itself).
 5. **`SMAppService.daemon(plistName:)`** in `HelperManager.swift` must match the plist filename.
 
 After an identity change, the first launch behaves like a fresh install: onboarding returns (new `UserDefaults` domain), the helper asks for its one admin approval under the new label, and Full Disk Access must be re-granted (TCC keys the grant to the bundle ID, so the new identity needs its own). The old identity's daemon lingers as a stale entry under System Settings → General → Login Items & Extensions — remove it there, or `sudo launchctl bootout system/<old-label>`.

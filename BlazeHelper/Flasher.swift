@@ -11,6 +11,13 @@ final class Flasher {
     private let stateLock = NSLock()
     private var running = false
     private var cancelled = false
+    /// Spans prepareDevice → flash → releaseDevice, so nothing can re-mount
+    /// the card in the window where the app holds it open.
+    private let blocker = MountBlocker()
+    private let deviceLock = NSLock()
+    private var preparedPath: String?
+    private var preparedDisk: String?
+    private var deviceWritten = false
 
     private static let chunkSize = 8 * 1024 * 1024
     private static let progressInterval: TimeInterval = 0.25
@@ -29,7 +36,76 @@ final class Flasher {
         stateLock.unlock()
     }
 
+    /// Makes the card openable by the app: validate, unmount, block re-mounts,
+    /// then hand the raw node to `uid`. Returns the path the app must open.
+    /// Nothing is changed if validation fails.
+    func prepare(bsdName: String, imageSize: Int64, uid: uid_t) throws -> String {
+        try validateTarget(bsdName: bsdName, imageSize: imageSize)
+        let path = Self.rawPath(bsdName)
+        deviceLock.lock()
+        defer { deviceLock.unlock() }
+        // Registered before the unmount so no mount can slip in behind it.
+        blocker.block(bsdName)
+        do {
+            try diskutil(["unmountDisk", "force", bsdName], failure: .unmountFailed)
+            guard chown(path, uid, Self.operatorGID) == 0 else {
+                throw Self.error(.openFailed,
+                                 "Cannot hand \(path) to the app: \(String(cString: strerror(errno)))")
+            }
+            // Owner-only: the card is the user's to write for this one flash.
+            chmod(path, 0o600)
+        } catch {
+            blocker.unblock()
+            throw error
+        }
+        preparedPath = path
+        preparedDisk = bsdName
+        deviceWritten = false
+        log.info("prepared \(path, privacy: .public) for uid \(uid)")
+        return path
+    }
+
+    /// Finishes with the card: ejects it if it was written, restores the node,
+    /// and stops blocking mounts. Idempotent, and safe when nothing is
+    /// prepared. The caller must have closed its descriptor first — an open
+    /// raw descriptor makes the eject fail with EBUSY.
+    func release() {
+        deviceLock.lock()
+        defer { deviceLock.unlock() }
+        if let path = preparedPath, let bsdName = preparedDisk {
+            // A card that was never touched is left in place, merely
+            // unmounted, so a retry after fixing a permission doesn't need a
+            // re-plug. A written one is ejected so nothing reads the old
+            // partition table.
+            if deviceWritten {
+                _ = try? diskutil(["eject", bsdName], failure: .ejectFailed)
+            }
+            chown(path, 0, Self.operatorGID)
+            chmod(path, 0o640)
+            log.info("released \(path, privacy: .public) (ejected: \(self.deviceWritten))")
+        }
+        preparedPath = nil
+        preparedDisk = nil
+        deviceWritten = false
+        blocker.unblock()
+    }
+
+    private func markDeviceWritten() {
+        deviceLock.lock()
+        deviceWritten = true
+        deviceLock.unlock()
+    }
+
+    private static func rawPath(_ bsdName: String) -> String {
+        "/dev/rdisk" + bsdName.dropFirst(4)
+    }
+
+    /// devfs nodes belong to root:operator; getgrnam so a non-standard gid
+    /// isn't clobbered on restore.
+    private static let operatorGID: gid_t = getgrnam("operator")?.pointee.gr_gid ?? 5
+
     func flash(imageHandle: FileHandle,
+               deviceHandle: FileHandle,
                imageSize: Int64,
                format: ImageFormat,
                payloadOffset: Int64,
@@ -52,7 +128,8 @@ final class Flasher {
         queue.async {
             let result: NSError?
             do {
-                try self.run(imageHandle: imageHandle, imageSize: imageSize,
+                try self.run(imageHandle: imageHandle, deviceHandle: deviceHandle,
+                             imageSize: imageSize,
                              format: format, payloadOffset: payloadOffset,
                              payloadSize: payloadSize,
                              bsdName: bsdName, verify: verify, simulate: simulate,
@@ -147,54 +224,43 @@ final class Flasher {
 
     // MARK: - Pipeline
 
-    private func run(imageHandle: FileHandle, imageSize: Int64,
+    private func run(imageHandle: FileHandle, deviceHandle: FileHandle, imageSize: Int64,
                      format: ImageFormat, payloadOffset: Int64, payloadSize: Int64,
                      bsdName: String, verify: Bool, simulate: Bool,
                      client: BlazeHelperClientProtocol?) throws {
         let (blockSize, deviceSize) = try validateTarget(bsdName: bsdName, imageSize: imageSize)
         log.info("flash start: \(bsdName, privacy: .public) image=\(imageSize) format=\(format.rawValue) simulate=\(simulate) verify=\(verify)")
 
-        // Block auto-mounts for the whole run (registered before the unmount
-        // so no mount can slip in; released only after eject).
-        let blocker = MountBlocker()
-        if !simulate { blocker.block(bsdName) }
-        defer { blocker.unblock() }
+        let devFD = deviceHandle.fileDescriptor
+        // The app opened this descriptor, so root must not take its word for
+        // what it is: it has to be the raw node of the disk that just passed
+        // every safety gate above. (Simulated runs write to /dev/null.)
+        if !simulate { try verifyDeviceHandle(devFD, matches: bsdName) }
+
+        // Hand the card back through releaseDevice, not here: the app still
+        // holds its own descriptor, and the eject in release() needs every
+        // descriptor closed. Closing ours deterministically (rather than when
+        // the FileHandle happens to dealloc) is what makes that ordering hold.
+        defer { try? deviceHandle.close() }
+
         let source = try ImageSourceFactory.make(fd: imageHandle.fileDescriptor, format: format,
                                                  payloadOffset: payloadOffset, payloadSize: payloadSize,
                                                  rawLength: imageSize)
 
         let progress = ProgressReporter(client: client, total: imageSize)
 
-        // Unmount
         progress.phase(.unmounting)
-        if simulate {
-            Thread.sleep(forTimeInterval: 0.3)
-        } else {
-            try diskutil(["unmountDisk", "force", bsdName], failure: .unmountFailed)
-        }
-
-        // Open target: the raw node for real runs, /dev/null for simulate.
-        let devicePath = simulate ? "/dev/null" : "/dev/rdisk" + bsdName.dropFirst(4)
-        var devFD = try openDevice(devicePath, oflag: O_WRONLY)
-
-        var ejected = false
-        defer {
-            if devFD >= 0 { close(devFD) }
-            // Never leave a half-written card mounted: eject even on failure
-            // or cancel (unless we already did, or never touched the disk).
-            if !simulate && !ejected {
-                _ = try? diskutil(["eject", bsdName], failure: .ejectFailed)
-            }
-        }
+        if simulate { Thread.sleep(forTimeInterval: 0.3) }
 
         // Write
         progress.phase(.writing)
+        if !simulate { markDeviceWritten() }
         let written: Int64
         do {
             written = try pump(from: source, to: devFD, deviceSize: simulate ? Int64.max : deviceSize,
                                blockSize: blockSize, progress: progress)
         } catch {
-            // flush what made it to the device before the deferred eject.
+            // flush what made it to the device before we hand it back.
             if !simulate { try? syncDevice(devFD) }
             throw error
         }
@@ -202,26 +268,20 @@ final class Flasher {
         // Sync
         progress.phase(.syncing)
         if !simulate { try syncDevice(devFD) }
-        close(devFD)
-        devFD = -1
 
         // Verify
         if verify {
             progress.phase(.verifying)
             progress.reset()
             try source.reset()
-            try runVerify(source: source, imageSize: written, bsdName: bsdName,
+            try runVerify(source: source, imageSize: written, deviceFD: devFD,
                           blockSize: blockSize, simulate: simulate, progress: progress)
         }
 
-        // Eject
+        // The eject itself belongs to release(), once both descriptors are
+        // closed; report the phase so the UI reflects what happens next.
         progress.phase(.ejecting)
-        if simulate {
-            Thread.sleep(forTimeInterval: 0.3)
-        } else {
-            try diskutil(["eject", bsdName], failure: .ejectFailed)
-        }
-        ejected = true
+        if simulate { Thread.sleep(forTimeInterval: 0.3) }
 
         progress.phase(.done)
         log.info("flash done: \(bsdName, privacy: .public)")
@@ -284,7 +344,7 @@ final class Flasher {
 
     /// Internal (not private) so the test harness can tamper a device and
     /// prove verify catches it.
-    func runVerify(source: ImageSource, imageSize: Int64, bsdName: String,
+    func runVerify(source: ImageSource, imageSize: Int64, deviceFD: Int32,
                    blockSize: Int, simulate: Bool,
                    progress: ProgressReporter) throws {
         progress.setTotal(imageSize)
@@ -304,9 +364,14 @@ final class Flasher {
             return
         }
 
-        let devicePath = "/dev/rdisk" + bsdName.dropFirst(4)
-        let devFD = try openDevice(devicePath, oflag: O_RDONLY)
-        defer { close(devFD) }
+        // Re-read through the same descriptor the write used — raw character
+        // devices aren't buffered, so a rewind is enough and no second
+        // (TCC-gated) open is needed.
+        guard lseek(deviceFD, 0, SEEK_SET) == 0 else {
+            throw Self.error(.readBackFailed,
+                             "Cannot rewind the card for verification: \(String(cString: strerror(errno)))")
+        }
+        let devFD = deviceFD
 
         let devBuf = try Self.alignedBuffer(Self.chunkSize)
         defer { devBuf.deallocate() }
@@ -344,72 +409,32 @@ final class Flasher {
         }
     }
 
-    // MARK: - Device opening
+    // MARK: - Device identity
 
-    /// TCC gates raw external-disk nodes with EPERM even for root (the same
-    /// gate that makes `sudo dd` fail without Full Disk Access). authopen is
-    /// the sanctioned path around it — an Apple setuid binary that opens the
-    /// node and passes the descriptor back over a socket — and it authorizes
-    /// silently for root, so the no-prompts promise holds.
-    private func openDevice(_ path: String, oflag: Int32) throws -> Int32 {
-        let fd = open(path, oflag)
-        if fd >= 0 { return fd }
-        if errno == EPERM || errno == EACCES {
-            return try authopenFD(path: path, oflag: oflag)
+    /// The app opens the card and passes the descriptor in, so this is the
+    /// gate that keeps `bsdName`'s safety checks meaningful: the descriptor
+    /// must be a character device whose rdev is exactly the raw node of the
+    /// disk that was validated. Without it, a compromised or buggy app could
+    /// name a harmless card and hand over a descriptor on the boot disk.
+    private func verifyDeviceHandle(_ fd: Int32, matches bsdName: String) throws {
+        var handleStat = stat()
+        guard fstat(fd, &handleStat) == 0 else {
+            throw Self.error(.deviceMismatch,
+                             "Cannot inspect the device handle: \(String(cString: strerror(errno)))")
         }
-        throw Self.error(.openFailed, "Cannot open \(path): \(String(cString: strerror(errno)))")
-    }
-
-    private func authopenFD(path: String, oflag: Int32) throws -> Int32 {
-        var pair: [Int32] = [-1, -1]
-        guard socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0 else {
-            throw Self.error(.openFailed, "socketpair failed: \(String(cString: strerror(errno)))")
+        guard (handleStat.st_mode & S_IFMT) == S_IFCHR else {
+            throw Self.error(.deviceMismatch, "The device handle is not a raw device node.")
         }
-        let parentSock = pair[0]
-        let childSock = pair[1]
-        defer { close(parentSock) }
-
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/libexec/authopen")
-        proc.arguments = ["-stdoutpipe", "-o", String(oflag), path]
-        proc.standardOutput = FileHandle(fileDescriptor: childSock, closeOnDealloc: false)
-        do {
-            try proc.run()
-        } catch {
-            close(childSock)
-            throw Self.error(.openFailed, "cannot launch authopen: \(error.localizedDescription)")
+        let path = Self.rawPath(bsdName)
+        var nodeStat = stat()
+        guard stat(path, &nodeStat) == 0 else {
+            throw Self.error(.deviceMismatch,
+                             "Cannot inspect \(path): \(String(cString: strerror(errno)))")
         }
-        close(childSock)
-
-        // authopen sends the descriptor as an SCM_RIGHTS control message.
-        var data = [UInt8](repeating: 0, count: 16)
-        var control = [UInt8](repeating: 0, count: 64)
-        var receivedFD: Int32 = -1
-        data.withUnsafeMutableBytes { dataPtr in
-            control.withUnsafeMutableBytes { ctlPtr in
-                var iov = iovec(iov_base: dataPtr.baseAddress, iov_len: dataPtr.count)
-                withUnsafeMutablePointer(to: &iov) { iovPtr in
-                    var msg = msghdr(msg_name: nil, msg_namelen: 0,
-                                     msg_iov: iovPtr, msg_iovlen: 1,
-                                     msg_control: ctlPtr.baseAddress,
-                                     msg_controllen: socklen_t(ctlPtr.count), msg_flags: 0)
-                    var n = 0
-                    repeat { n = recvmsg(parentSock, &msg, 0) } while n < 0 && errno == EINTR
-                    // cmsghdr on Darwin: len(4) level(4) type(4), data at 12.
-                    if n > 0, msg.msg_controllen >= 16,
-                       ctlPtr.load(fromByteOffset: 4, as: Int32.self) == SOL_SOCKET,
-                       ctlPtr.load(fromByteOffset: 8, as: Int32.self) == SCM_RIGHTS {
-                        receivedFD = ctlPtr.load(fromByteOffset: 12, as: Int32.self)
-                    }
-                }
-            }
+        guard handleStat.st_rdev == nodeStat.st_rdev else {
+            log.error("device handle rdev \(handleStat.st_rdev) != \(path, privacy: .public) rdev \(nodeStat.st_rdev)")
+            throw Self.error(.deviceMismatch, "The device handle does not refer to \(bsdName).")
         }
-        proc.waitUntilExit()
-        guard receivedFD >= 0 else {
-            throw Self.error(.openFailed,
-                             "authopen did not return a descriptor for \(path) (status \(proc.terminationStatus)).")
-        }
-        return receivedFD
     }
 
     // MARK: - Small utilities

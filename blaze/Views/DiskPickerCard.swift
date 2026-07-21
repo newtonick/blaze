@@ -27,23 +27,7 @@ struct DiskPickerCard: View {
                 .help("Rescan cards (⌘R)")
             }
 
-            if !model.hasFullDiskAccess {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 8) {
-                        Image(systemName: "externaldrive.badge.exclamationmark")
-                            .font(.system(size: 22, weight: .light))
-                            .foregroundStyle(.tertiary)
-                        Text("Full Disk Access needed to detect cards")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                        Button("Open System Settings") { FullDiskAccess.openSettings() }
-                            .controlSize(.small)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 16)
-            } else if model.disks.isEmpty {
+            if model.disks.isEmpty {
                 HStack {
                     Spacer()
                     VStack(spacing: 6) {

@@ -35,6 +35,9 @@ final class HelperService: NSObject, NSXPCListenerDelegate, BlazeHelperProtocol 
             let stillIdle = self.connectionCount == 0
             self.stateLock.unlock()
             if stillIdle && !self.flasher.isRunning {
+                // The app may have died holding a prepared card; put the
+                // device node back before letting go.
+                self.flasher.release()
                 self.log.info("idle; exiting so launchd can respawn the current binary on demand")
                 exit(0)
             }
@@ -47,7 +50,33 @@ final class HelperService: NSObject, NSXPCListenerDelegate, BlazeHelperProtocol 
         reply(blazeHelperVersion)
     }
 
+    func prepareDevice(bsdName: String, imageSize: Int64,
+                       reply: @escaping @Sendable (String?, NSError?) -> Void) {
+        // The card is handed to the user on the other end of this connection,
+        // not to whoever asks — and the peer's code signature was already
+        // checked when the connection was accepted.
+        guard let uid = NSXPCConnection.current()?.effectiveUserIdentifier else {
+            reply(nil, NSError(domain: blazeHelperErrorDomain,
+                               code: BlazeHelperError.openFailed.rawValue,
+                               userInfo: [NSLocalizedDescriptionKey: "No caller identity."]))
+            return
+        }
+        do {
+            let path = try flasher.prepare(bsdName: bsdName, imageSize: imageSize, uid: uid)
+            reply(path, nil)
+        } catch let error as NSError {
+            log.error("prepareDevice(\(bsdName, privacy: .public)) refused: \(error.localizedDescription, privacy: .public)")
+            reply(nil, error)
+        }
+    }
+
+    func releaseDevice(reply: @escaping @Sendable () -> Void) {
+        flasher.release()
+        reply()
+    }
+
     func flash(imageHandle: FileHandle,
+               deviceHandle: FileHandle,
                imageSize: Int64,
                format: Int,
                payloadOffset: Int64,
@@ -63,7 +92,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, BlazeHelperProtocol 
             return
         }
         let client = NSXPCConnection.current()?.remoteObjectProxy as? BlazeHelperClientProtocol
-        flasher.flash(imageHandle: imageHandle, imageSize: imageSize,
+        flasher.flash(imageHandle: imageHandle, deviceHandle: deviceHandle, imageSize: imageSize,
                       format: imageFormat, payloadOffset: payloadOffset, payloadSize: payloadSize,
                       bsdName: bsdName, verify: verify, simulate: simulate,
                       client: client, reply: reply)

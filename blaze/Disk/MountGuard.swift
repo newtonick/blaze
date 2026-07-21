@@ -7,22 +7,26 @@ import DiskArbitration
 /// boot disk, external non-removable drives, and disk images are unaffected,
 /// and everything returns to normal the moment Blaze quits.
 ///
-/// @unchecked Sendable: `suspendCount` is lock-guarded and read from the DA
-/// callback queue; `session` is only touched from start/stop on the main
-/// actor.
+/// Blaze itself has to mount a card in one situation: macOS only issues the
+/// Removable Volumes permission prompt when the app reads a file on a mounted
+/// removable volume. `whileMountingAllowed` covers that by tearing the
+/// DiskArbitration session down for the duration rather than flagging it as
+/// suspended — an unregistered callback cannot dissent, whereas a flag relies
+/// on diskarbitrationd consulting us at exactly the right moment.
+///
+/// @unchecked Sendable: all mutable state is guarded by `lock`, and the DA
+/// approval callback reads none of it.
 nonisolated final class MountGuard: @unchecked Sendable {
-    private var session: DASession?
+    private let lock = NSLock()
     private let queue = DispatchQueue(label: "dev.derivation48.blaze.mountguard")
-    private let suspendLock = NSLock()
-    private var suspendCount = 0
+    private var session: DASession?
+    /// The caller's intent (preference + lifecycle), independent of whether a
+    /// session is registered right now.
+    private var wanted = false
+    /// Open `whileMountingAllowed` scopes.
+    private var allowDepth = 0
 
-    private let approvalCallback: DADiskMountApprovalCallback = { disk, context in
-        guard let context else { return nil }
-        let guardian = Unmanaged<MountGuard>.fromOpaque(context).takeUnretainedValue()
-        guardian.suspendLock.lock()
-        let suspended = guardian.suspendCount > 0
-        guardian.suspendLock.unlock()
-        if suspended { return nil }
+    private let approvalCallback: DADiskMountApprovalCallback = { disk, _ in
         // Block any removable medium — USB reader/stick or a card in the
         // built-in SD slot (which is internal-bus but removable). The boot
         // disk and external SSD/HDD enclosures are non-removable so they
@@ -38,26 +42,45 @@ nonisolated final class MountGuard: @unchecked Sendable {
     }
 
     func start() {
-        guard session == nil, let s = DASessionCreate(kCFAllocatorDefault) else { return }
-        session = s
-        DARegisterDiskMountApprovalCallback(s, nil, approvalCallback,
-                                            Unmanaged.passUnretained(self).toOpaque())
-        DASessionSetDispatchQueue(s, queue)
+        lock.lock()
+        wanted = true
+        sync()
+        lock.unlock()
     }
 
     func stop() {
-        guard let s = session else { return }
-        DAUnregisterCallback(s, unsafeBitCast(approvalCallback, to: UnsafeMutableRawPointer.self),
-                             Unmanaged.passUnretained(self).toOpaque())
-        DASessionSetDispatchQueue(s, nil)
-        session = nil
+        lock.lock()
+        wanted = false
+        sync()
+        lock.unlock()
     }
 
-    /// The TCC permission probe mounts the card deliberately; it runs inside
-    /// this scope so the guard doesn't dissent our own mount.
-    func whileSuspended<T>(_ body: () -> T) -> T {
-        suspendLock.lock(); suspendCount += 1; suspendLock.unlock()
-        defer { suspendLock.lock(); suspendCount -= 1; suspendLock.unlock() }
+    /// Runs `body` with auto-mount blocking fully off, restoring it after.
+    /// Safe from any thread and safe to nest. Other removable media can
+    /// auto-mount during the (brief) window — that is the price of being
+    /// certain our own deliberate mount is never dissented.
+    func whileMountingAllowed<T>(_ body: () -> T) -> T {
+        lock.lock(); allowDepth += 1; sync(); lock.unlock()
+        defer { lock.lock(); allowDepth -= 1; sync(); lock.unlock() }
         return body()
+    }
+
+    /// Brings the DA session in line with `wanted`/`allowDepth`; caller holds
+    /// `lock`. The approval callback takes no locks, so tearing the session
+    /// down here cannot deadlock against a callback already in flight.
+    private func sync() {
+        let shouldGuard = wanted && allowDepth == 0
+        if shouldGuard, session == nil {
+            guard let s = DASessionCreate(kCFAllocatorDefault) else { return }
+            session = s
+            DARegisterDiskMountApprovalCallback(s, nil, approvalCallback,
+                                                Unmanaged.passUnretained(self).toOpaque())
+            DASessionSetDispatchQueue(s, queue)
+        } else if !shouldGuard, let s = session {
+            DAUnregisterCallback(s, unsafeBitCast(approvalCallback, to: UnsafeMutableRawPointer.self),
+                                 Unmanaged.passUnretained(self).toOpaque())
+            DASessionSetDispatchQueue(s, nil)
+            session = nil
+        }
     }
 }

@@ -1,16 +1,14 @@
 import Foundation
 import AppKit
 
-/// Full Disk Access is what actually lets the (root) helper open raw
-/// external-disk nodes — TCC gates those even for root, and the helper shares
-/// the app's TCC identity via AssociatedBundleIdentifiers, so the app's grant
-/// covers it. macOS provides no API to *prompt* for FDA; an app can only
-/// detect whether it has it and deep-link the user to the right Settings pane.
+/// Full Disk Access detection + deep-link. Granted AFTER Removable Volumes in
+/// onboarding — the order matters: FDA silently permits removable-volume file
+/// reads, which would suppress the one-time Removable Volumes prompt if it
+/// were granted first.
 enum FullDiskAccess {
-    /// Probes by reading the system TCC database. The file is POSIX
-    /// world-readable, but TCC intercepts the open based on the responsible
-    /// process and only lets an FDA-granted app through — so a successful
-    /// read is a reliable, side-effect-free signal that FDA is granted.
+    /// Probes by reading the system TCC database. POSIX-world-readable, but
+    /// TCC gates the open by responsible process, so a successful read is a
+    /// reliable, side-effect-free signal that FDA is granted.
     static var isGranted: Bool {
         let fd = open("/Library/Application Support/com.apple.TCC/TCC.db", O_RDONLY)
         if fd >= 0 { close(fd); return true }
@@ -18,7 +16,18 @@ enum FullDiskAccess {
     }
 
     static func openSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+        openPrivacyPane("Privacy_AllFiles")
+    }
+
+    /// Privacy & Security → Files and Folders, where a declined Removable
+    /// Volumes prompt can be reversed. An unknown anchor still lands the user
+    /// in Privacy & Security, so a macOS rename degrades rather than breaks.
+    static func openRemovableVolumesSettings() {
+        openPrivacyPane("Privacy_RemovableVolume")
+    }
+
+    private static func openPrivacyPane(_ anchor: String) {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") {
             NSWorkspace.shared.open(url)
         }
     }

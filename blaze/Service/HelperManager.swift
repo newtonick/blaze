@@ -50,15 +50,13 @@ final class HelperManager {
     }
 
     /// The single authorization Blaze asks for. Throws with a readable
-    /// message if the user declines.
+    /// message if the user declines. Never opens System Settings on its own —
+    /// the UI offers a button for that, so nothing appears unbidden.
     func install() throws {
         do {
             try service.register()
         } catch {
             refreshStatus()
-            if status == .requiresApproval {
-                SMAppService.openSystemSettingsLoginItems()
-            }
             throw error
         }
         refreshStatus()
@@ -68,15 +66,26 @@ final class HelperManager {
         SMAppService.openSystemSettingsLoginItems()
     }
 
+    /// Watches for the Login Items approval while onboarding's helper pane is
+    /// up — flipping that toggle sends no notification. Cancelled with the
+    /// pane.
+    func watchApproval() async {
+        while !Task.isCancelled, status != .enabled {
+            try? await Task.sleep(for: .seconds(2))
+            refreshStatus()
+        }
+    }
+
     /// On connect, compare versions; if the installed helper is stale
     /// (e.g. the app was updated in place), re-register so launchd picks up
-    /// the new binary.
-    func handshake() async {
+    /// the new binary. `autoInstall` is off until onboarding has run, so a
+    /// first launch registers nothing until the user asks for it.
+    func handshake(autoInstall: Bool) async {
         refreshStatus()
         if status != .enabled {
             // Helper missing or awaiting approval (e.g. after an update's
             // re-registration was interrupted): converge to installed.
-            try? install()
+            if autoInstall { try? install() }
             return
         }
         let installed = await installedVersion()
@@ -125,9 +134,49 @@ final class HelperManager {
         }
     }
 
-    /// Streams the image to the helper as an open file descriptor — the
-    /// helper never opens user paths itself (root does not bypass TCC).
-    func flash(imageURL: URL, info: ImageInfo, bsdName: String,
+    /// Asks the helper to validate, unmount and hand over the card. Returns
+    /// the raw device path for the app to open — see `prepareDevice` in the
+    /// protocol for why the app has to be the one to open it.
+    func prepareDevice(bsdName: String, imageSize: Int64) async throws -> String {
+        let c = makeConnection()
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
+            let box = ReplyOnce<Result<String, Error>>(nil) { cont.resume(with: $0) }
+            let proxy = c.remoteObjectProxyWithErrorHandler { error in
+                box.resume(.failure(error))
+            } as? BlazeHelperProtocol
+            guard let proxy else {
+                box.resume(.failure(NSError(domain: blazeHelperErrorDomain,
+                                            code: BlazeHelperError.openFailed.rawValue,
+                                            userInfo: [NSLocalizedDescriptionKey: "Cannot reach the helper."])))
+                return
+            }
+            proxy.prepareDevice(bsdName: bsdName, imageSize: imageSize) { path, error in
+                if let path {
+                    box.resume(.success(path))
+                } else {
+                    box.resume(.failure(error ?? NSError(
+                        domain: blazeHelperErrorDomain,
+                        code: BlazeHelperError.openFailed.rawValue,
+                        userInfo: [NSLocalizedDescriptionKey: "The helper did not hand over the card."])))
+                }
+            }
+        }
+    }
+
+    /// Best-effort undo of `prepareDevice`; failure here is not worth
+    /// reporting over the error that caused it.
+    func releaseDevice() async {
+        guard let proxy = connection?.remoteObjectProxy as? BlazeHelperProtocol else { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            let box = ReplyOnce<Void>(nil) { cont.resume() }
+            proxy.releaseDevice { box.resume(()) }
+        }
+    }
+
+    /// Streams the image and the card to the helper as open file descriptors
+    /// — the helper never opens a TCC-gated path itself (root does not bypass
+    /// TCC).
+    func flash(imageURL: URL, info: ImageInfo, deviceHandle: FileHandle, bsdName: String,
                verify: Bool, simulate: Bool,
                progress: @escaping @Sendable (FlashPhase, Int64, Int64) -> Void) async throws {
         let handle = try FileHandle(forReadingFrom: imageURL)
@@ -151,7 +200,8 @@ final class HelperManager {
                                    userInfo: [NSLocalizedDescriptionKey: "Cannot reach the helper."]))
                 return
             }
-            proxy.flash(imageHandle: handle, imageSize: info.uncompressedSize ?? 0,
+            proxy.flash(imageHandle: handle, deviceHandle: deviceHandle,
+                        imageSize: info.uncompressedSize ?? 0,
                         format: info.format.rawValue,
                         payloadOffset: info.payloadOffset, payloadSize: info.payloadSize,
                         bsdName: bsdName,
