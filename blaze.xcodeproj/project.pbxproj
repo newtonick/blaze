@@ -374,11 +374,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Blaze;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSRemovableVolumesUsageDescription = "Blaze writes disk images to SD cards and needs access to removable volumes.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.derivation48.blaze;
 				PRODUCT_NAME = Blaze;
 				REGISTER_APP_GROUPS = YES;
@@ -407,11 +408,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Blaze;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSRemovableVolumesUsageDescription = "Blaze writes disk images to SD cards and needs access to removable volumes.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.derivation48.blaze;
 				PRODUCT_NAME = Blaze;
 				REGISTER_APP_GROUPS = YES;

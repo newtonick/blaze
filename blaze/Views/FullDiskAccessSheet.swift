@@ -15,7 +15,7 @@ struct FullDiskAccessSheet: View {
             Text("Full Disk Access needed")
                 .font(.title3.weight(.semibold))
 
-            Text("Writing to a card requires Full Disk Access — it's how macOS lets Blaze reach the raw disk. This is the only permission Blaze needs, and it's granted once.")
+            Text("Full Disk Access lets Blaze detect your SD cards. Grant it once; when you flash, macOS will also ask to access the card itself — just click Allow.")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

@@ -105,7 +105,7 @@ struct OnboardingSheet: View {
                     .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
             } else {
-                Text("Writing to a card requires Full Disk Access — it's how macOS lets Blaze reach the raw disk, and the only permission Blaze needs. Turn on **Blaze** in System Settings, then come back.")
+                Text("Full Disk Access lets Blaze detect your cards. Turn on **Blaze** in System Settings, then come back. (The first time you flash, macOS also asks once to access the card — you'll just click Allow.)")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

@@ -84,3 +84,7 @@ It verifies the signature, staples the notarization ticket if needed, confirms G
 - The safest way to exercise the real write/verify path is a disk image: `hdiutil create -size 100m -layout NONE -o scratch -type UDIF && hdiutil attach -nomount scratch.dmg` yields a user-owned `/dev/rdiskN` the full pipeline can run against.
 - Helper changes deploy on the next launch after the daemon idle-exits (~15 s after the app quits). Protocol changes must bump `blazeHelperVersion` in `Shared/BlazeHelperProtocol.swift`, which triggers an automatic re-registration.
 - App and helper log to the `dev.derivation48.blaze` / `dev.derivation48.blaze.helper` subsystems: `log stream --level info --predicate 'subsystem BEGINSWITH "dev.derivation48.blaze"'` shows disk scoring, selection, helper lifecycle, and flash phase/failure detail.
+
+## License
+
+Blaze is released under the [MIT License](LICENSE).

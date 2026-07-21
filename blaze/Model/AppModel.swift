@@ -165,9 +165,9 @@ final class AppModel {
 
     func requestFlash(simulate: Bool) {
         guard canFlash else { return }
-        // A real write needs Full Disk Access (simulate writes to /dev/null,
-        // which doesn't). Gate here with clear instructions rather than
-        // letting the helper fail deep in the pipeline.
+        // Full Disk Access covers silent disk enumeration (the card list).
+        // The raw WRITE needs the separate Removable Volumes permission —
+        // that is acquired in-flow just before flashing (confirmFlash).
         if !simulate && !refreshFullDiskAccess() {
             showFDAGate = true
             return
@@ -188,6 +188,7 @@ final class AppModel {
 
         Task {
             do {
+                if !simulate { await requestRemovableVolumeAccess(disk) }
                 try await helper.flash(
                     imageURL: url, info: info, bsdName: disk.bsdName,
                     verify: verify, simulate: simulate
@@ -202,15 +203,38 @@ final class AppModel {
                 if ns.domain == blazeHelperErrorDomain, ns.code == BlazeHelperError.cancelled.rawValue {
                     flashState = .idle
                 } else if ns.localizedDescription.contains("authopen") || ns.localizedDescription.contains("Operation not permitted") {
-                    // FDA was revoked between the gate and the write.
-                    hasFullDiskAccess = false
                     flashState = .failure(message:
-                        "macOS blocked access to the card. Grant Blaze Full Disk Access in System Settings → Privacy & Security, then flash again.")
+                        "macOS blocked access to the card. When you flash again, click Allow if asked to access files on a removable volume. If no prompt appears, enable Blaze under System Settings → Privacy & Security → Files & Folders → Removable Volumes (or Full Disk Access).")
                 } else {
                     flashState = .failure(message: ns.localizedDescription)
                 }
             }
         }
+    }
+
+    /// Opening a removable card's raw device is gated by the Removable Volumes
+    /// TCC permission (checked on this app, the responsible process) — Full
+    /// Disk Access does NOT cover it. macOS only shows the one-time prompt
+    /// when the app actually touches files on a mounted removable volume, so
+    /// mount the target card and read its root here, right before handing off
+    /// to the helper. Runs with the mount guard suspended (so our own mount
+    /// isn't dissented); the helper unmounts again before writing. Harmless
+    /// once granted, or if the card has no mountable filesystem.
+    private nonisolated func requestRemovableVolumeAccess(_ disk: Disk) async {
+        let bsdName = disk.bsdName
+        var mounts = disk.mountPoints
+        let guardian = mountGuard
+        await Task.detached(priority: .userInitiated) {
+            guardian.whileSuspended {
+                if mounts.isEmpty {
+                    DiskEnumerator.mountDisk(bsdName)
+                    mounts = DiskEnumerator.mountPoints(of: bsdName)
+                }
+                for mount in mounts {
+                    _ = try? FileManager.default.contentsOfDirectory(atPath: mount)
+                }
+            }
+        }.value
     }
 
     func cancelFlash() {
