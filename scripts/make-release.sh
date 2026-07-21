@@ -60,10 +60,31 @@ echo "==> verifying code signature"
 codesign --verify --deep --strict --verbose=1 "$APP"
 
 # Staple if the ticket isn't embedded yet (no-op if already stapled). This
-# only succeeds once Apple has finished notarizing the submission.
+# only succeeds once Apple has finished notarizing *this exact binary*.
 if ! xcrun stapler validate "$APP" >/dev/null 2>&1; then
     echo "==> stapling notarization ticket"
-    xcrun stapler staple "$APP"
+    if ! xcrun stapler staple "$APP"; then
+        cat >&2 <<EOF
+
+error: could not staple a notarization ticket to this app.
+
+  "Record not found" means Apple has no accepted ticket for this exact
+  binary — it has not been notarized yet. Common causes:
+
+    * You pointed at the archive's app
+      (…xcarchive/Products/Applications/Blaze.app). That copy is never
+      notarized — export it first (Organizer → Distribute → Direct
+      Distribution → Export) and pass the exported app instead.
+
+    * Notarization never completed. Check with:
+        xcrun notarytool history --keychain-profile blaze-notary
+      and submit this app if needed:
+        ditto -c -k --keepParent "$APP" /tmp/Blaze.zip
+        xcrun notarytool submit /tmp/Blaze.zip --keychain-profile blaze-notary --wait
+      then re-run this script once it reports "Accepted".
+EOF
+        exit 1
+    fi
 fi
 
 echo "==> Gatekeeper assessment"

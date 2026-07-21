@@ -26,7 +26,7 @@ Blaze is a single-purpose system tool built entirely on Apple frameworks — Swi
 
 | Confirmation before an unrecoverable write | Settings |
 |:---:|:---:|
-| <img src="docs/images/confirm-sheet.png" width="380" alt="Erase this card? sheet naming the card, its size, and the image with its hash, with a Verify after writing checkbox and a red Erase and Flash button"> | <img src="docs/images/settings.png" width="380" alt="Settings: Verify after writing, Block auto-mount of removable disks, and Privileged helper status showing Installed"> |
+| <img src="docs/images/confirm-sheet.png" width="380" alt="Erase this card? sheet naming the card, its size, and the image with its hash, with a Verify after writing checkbox and a red Erase and Flash button"> | <img src="docs/images/settings.png" width="380" alt="Settings: Verify after writing, Block auto-mount of removable disks, and Privileged helper Installed plus Full Disk Access Granted"> |
 
 ## Building
 
