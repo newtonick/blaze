@@ -68,6 +68,7 @@ final class AppModel {
     private let watcher = DiskWatcher()
     private let mountGuard = MountGuard()
     private var hashTask: Task<Void, Never>?
+    private var flashTask: Task<Void, Never>?
 
     var canFlash: Bool {
         imageURL != nil && selectedDisk != nil && !flashState.isFlashing && fitProblem == nil
@@ -304,12 +305,21 @@ final class AppModel {
         flashState = .flashing(progress, simulated: simulate)
         let started = Date()
 
-        Task {
+        flashTask = Task {
             // Held outside the `do` so the failure path can close and hand
             // back whatever was already opened.
             var openedHandle: FileHandle?
             var handedOver = false
             do {
+                // Ask the helper for a sign of life before touching the card.
+                // If launchd can't spawn it, every later call would wait on a
+                // peer that never arrives.
+                guard await helper.isReachable() else {
+                    throw NSError(domain: blazeHelperErrorDomain,
+                                  code: BlazeHelperError.openFailed.rawValue,
+                                  userInfo: [NSLocalizedDescriptionKey:
+                                    "The privileged helper isn't running. Quit and reopen Blaze — it repairs the helper on launch. If that doesn't help, reinstall it from Settings."])
+                }
                 let deviceHandle: FileHandle
                 if simulate {
                     deviceHandle = try Self.openDevice("/dev/null")
@@ -343,7 +353,8 @@ final class AppModel {
                 if handedOver { await helper.releaseDevice() }
                 let ns = error as NSError
                 log.error("flash failed: \(ns.domain, privacy: .public) [\(ns.code)] \(ns.localizedDescription, privacy: .public)")
-                if ns.domain == blazeHelperErrorDomain, ns.code == BlazeHelperError.cancelled.rawValue {
+                if error is CancellationError
+                    || (ns.domain == blazeHelperErrorDomain && ns.code == BlazeHelperError.cancelled.rawValue) {
                     flashState = .idle
                 } else {
                     // Report what the helper actually said. The old code
@@ -398,8 +409,13 @@ final class AppModel {
         }.value
     }
 
+    /// Cancel has to reach two different places: a write already under way is
+    /// stopped cooperatively by the helper, but before that the app is simply
+    /// waiting on XPC — and if the helper never answers, only cancelling this
+    /// task ends the wait.
     func cancelFlash() {
         helper.cancelFlash()
+        flashTask?.cancel()
     }
 
     func setMountBlocking(_ enabled: Bool) {

@@ -59,8 +59,59 @@ final class HelperManager {
             refreshStatus()
             throw error
         }
+        registeredBuild = Self.appBuild
         refreshStatus()
     }
+
+    /// Rewrites launchd's registration record. Necessary whenever the app
+    /// bundle changes: the record is tied to the bundle it was registered
+    /// from, so an in-place update leaves it pointing at the old one and every
+    /// spawn fails with EX_CONFIG (78) — the daemon never starts and XPC calls
+    /// simply never get a reply. Background Items approval survives this, so
+    /// there is no new prompt.
+    private func reregister() async {
+        log.info("re-registering the helper (build \(Self.appBuild, privacy: .public))")
+        invalidate()
+        do {
+            try await service.unregister()
+        } catch {
+            // Worth knowing: a failed unregister is why a re-registration can
+            // update the existing record in place instead of replacing it,
+            // leaving launchd's stale launch constraint behind.
+            log.error("unregister failed: \(error.localizedDescription, privacy: .public)")
+        }
+        // Registering again before the unregistration lands updates the old
+        // record rather than creating one, so wait for the status to settle.
+        for _ in 0..<15 where service.status != .notRegistered {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        if service.status != .notRegistered {
+            log.error("helper still registered after unregister; registering over it")
+        }
+        do {
+            try service.register()
+            registeredBuild = Self.appBuild
+            log.info("registered helper for build \(Self.appBuild, privacy: .public)")
+        } catch {
+            log.error("re-registration failed: \(error.localizedDescription, privacy: .public)")
+        }
+        refreshStatus()
+    }
+
+    /// User-driven repair for a helper that is registered but won't run —
+    /// the state a stale launchd record leaves behind.
+    func reinstall() async {
+        await reregister()
+    }
+
+    /// The app build the current registration was made from.
+    private var registeredBuild: String? {
+        get { UserDefaults.standard.string(forKey: Self.registeredBuildKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.registeredBuildKey) }
+    }
+
+    private static let registeredBuildKey = "helperRegisteredForAppBuild"
+    private static let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
 
     func openApprovalSettings() {
         SMAppService.openSystemSettingsLoginItems()
@@ -76,10 +127,9 @@ final class HelperManager {
         }
     }
 
-    /// On connect, compare versions; if the installed helper is stale
-    /// (e.g. the app was updated in place), re-register so launchd picks up
-    /// the new binary. `autoInstall` is off until onboarding has run, so a
-    /// first launch registers nothing until the user asks for it.
+    /// Converges the installed helper on this app build. `autoInstall` is off
+    /// until onboarding has run, so a first launch registers nothing until the
+    /// user asks for it.
     func handshake(autoInstall: Bool) async {
         refreshStatus()
         if status != .enabled {
@@ -88,13 +138,24 @@ final class HelperManager {
             if autoInstall { try? install() }
             return
         }
+        // An app update invalidates the registration whether or not the helper
+        // still answers, so refresh it before asking anything of the daemon.
+        if registeredBuild != Self.appBuild {
+            log.info("app build changed (\(self.registeredBuild ?? "none", privacy: .public) → \(Self.appBuild, privacy: .public))")
+            await reregister()
+        }
         let installed = await installedVersion()
-        if let installed, installed != blazeHelperVersion {
-            log.info("helper version \(installed, privacy: .public) != \(blazeHelperVersion, privacy: .public); re-registering")
-            invalidate()
-            try? await service.unregister()
-            try? service.register()
-            refreshStatus()
+        if installed == nil {
+            // Unreachable: either launchd is refusing to spawn it (a stale
+            // record we haven't repaired) or it is wedged. Either way the only
+            // repair the app can make is a fresh registration — and doing it
+            // here is what keeps a flash from waiting on a daemon that will
+            // never arrive.
+            log.error("helper did not answer; re-registering")
+            await reregister()
+        } else if installed != blazeHelperVersion {
+            log.info("helper version \(installed ?? "?", privacy: .public) != \(blazeHelperVersion, privacy: .public); re-registering")
+            await reregister()
         }
     }
 
@@ -122,39 +183,75 @@ final class HelperManager {
         connection = nil
     }
 
-    func installedVersion() async -> String? {
+    /// Sends one request and waits for its reply, with two escapes the bare
+    /// continuation doesn't have. When launchd cannot spawn the daemon, the
+    /// message waits for a peer that never arrives and XPC reports neither a
+    /// reply nor an error — so a deadline is the only thing that ends the
+    /// wait. Task cancellation ends it too, which is what makes Cancel work
+    /// while the helper is unreachable.
+    ///
+    /// Deliberately not used for `flash`: abandoning a write that is actually
+    /// under way would let the card be ejected from under the helper. That one
+    /// waits for the helper's own cooperative cancel.
+    private func send<T: Sendable>(
+        timeout: Double,
+        _ body: (BlazeHelperProtocol, @escaping @Sendable (Result<T, Error>) -> Void) -> Void
+    ) async throws -> T {
         let c = makeConnection()
-        return await withCheckedContinuation { cont in
-            let box = ReplyOnce<String?>(cont)
-            let proxy = c.remoteObjectProxyWithErrorHandler { error in
-                box.resume(nil)
-            } as? BlazeHelperProtocol
-            guard let proxy else { box.resume(nil); return }
-            proxy.version { box.resume($0) }
+        let mailbox = ReplyMailbox<T>()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, Error>) in
+                mailbox.attach(cont)
+                Task { [mailbox] in
+                    do { try await Task.sleep(for: .seconds(timeout)) } catch { return }
+                    mailbox.settle(.failure(Self.unresponsiveError))
+                }
+                let proxy = c.remoteObjectProxyWithErrorHandler { error in
+                    mailbox.settle(.failure(error))
+                } as? BlazeHelperProtocol
+                guard let proxy else {
+                    mailbox.settle(.failure(Self.unresponsiveError))
+                    return
+                }
+                body(proxy) { mailbox.settle($0) }
+            }
+        } onCancel: {
+            mailbox.settle(.failure(CancellationError()))
         }
+    }
+
+    private static var unresponsiveError: NSError {
+        NSError(domain: blazeHelperErrorDomain,
+                code: BlazeHelperError.openFailed.rawValue,
+                userInfo: [NSLocalizedDescriptionKey:
+                    "The privileged helper isn't responding. Quit and reopen Blaze — it reinstalls the helper on launch. If that doesn't help, reinstall it from Settings."])
+    }
+
+    func installedVersion() async -> String? {
+        try? await send(timeout: 6) { proxy, reply in
+            proxy.version { reply(.success($0)) }
+        }
+    }
+
+    /// True when the helper answers at all. Checked before a flash so an
+    /// unreachable daemon fails fast, with an explanation, instead of after
+    /// the card has been unmounted and handed over.
+    func isReachable() async -> Bool {
+        await installedVersion() != nil
     }
 
     /// Asks the helper to validate, unmount and hand over the card. Returns
     /// the raw device path for the app to open — see `prepareDevice` in the
     /// protocol for why the app has to be the one to open it.
     func prepareDevice(bsdName: String, imageSize: Int64) async throws -> String {
-        let c = makeConnection()
-        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
-            let box = ReplyOnce<Result<String, Error>>(nil) { cont.resume(with: $0) }
-            let proxy = c.remoteObjectProxyWithErrorHandler { error in
-                box.resume(.failure(error))
-            } as? BlazeHelperProtocol
-            guard let proxy else {
-                box.resume(.failure(NSError(domain: blazeHelperErrorDomain,
-                                            code: BlazeHelperError.openFailed.rawValue,
-                                            userInfo: [NSLocalizedDescriptionKey: "Cannot reach the helper."])))
-                return
-            }
+        // Force-unmounting a busy card can take a few seconds; anything past
+        // this is the helper not being there at all.
+        try await send(timeout: 45) { proxy, reply in
             proxy.prepareDevice(bsdName: bsdName, imageSize: imageSize) { path, error in
                 if let path {
-                    box.resume(.success(path))
+                    reply(.success(path))
                 } else {
-                    box.resume(.failure(error ?? NSError(
+                    reply(.failure(error ?? NSError(
                         domain: blazeHelperErrorDomain,
                         code: BlazeHelperError.openFailed.rawValue,
                         userInfo: [NSLocalizedDescriptionKey: "The helper did not hand over the card."])))
@@ -163,13 +260,12 @@ final class HelperManager {
         }
     }
 
-    /// Best-effort undo of `prepareDevice`; failure here is not worth
-    /// reporting over the error that caused it.
+    /// Best-effort undo of `prepareDevice`; a failure here isn't worth
+    /// reporting over the error that caused it — but it must not hang either,
+    /// since it runs on the way out of a failed flash.
     func releaseDevice() async {
-        guard let proxy = connection?.remoteObjectProxy as? BlazeHelperProtocol else { return }
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            let box = ReplyOnce<Void>(nil) { cont.resume() }
-            proxy.releaseDevice { box.resume(()) }
+        _ = try? await send(timeout: 15) { (proxy, reply: @escaping @Sendable (Result<Bool, Error>) -> Void) in
+            proxy.releaseDevice { reply(.success(true)) }
         }
     }
 
@@ -214,9 +310,46 @@ final class HelperManager {
     }
 }
 
+/// One-shot mailbox for a helper reply: whichever of reply, connection error,
+/// deadline, or cancellation happens first wins and the rest are ignored.
+/// Settling before `attach` is expected — cancellation can land before the
+/// continuation exists — so the result is held until there's somewhere to put
+/// it. Nonisolated because XPC reply blocks, the timer, and the cancellation
+/// handler all arrive on different threads.
+private nonisolated final class ReplyMailbox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<T, Error>?
+    private var settled: Result<T, Error>?
+    private var resumed = false
+
+    func attach(_ cont: CheckedContinuation<T, Error>) {
+        lock.lock()
+        if let settled, !resumed {
+            resumed = true
+            lock.unlock()
+            cont.resume(with: settled)
+            return
+        }
+        continuation = cont
+        lock.unlock()
+    }
+
+    func settle(_ result: Result<T, Error>) {
+        lock.lock()
+        guard !resumed else { lock.unlock(); return }
+        if settled == nil { settled = result }
+        guard let cont = continuation else { lock.unlock(); return }
+        resumed = true
+        continuation = nil
+        let outcome = settled!
+        lock.unlock()
+        cont.resume(with: outcome)
+    }
+}
+
 /// XPC can report both a reply and (later) a connection error; a checked
 /// continuation must resume exactly once.
-private final class ReplyOnce<T>: @unchecked Sendable {
+private nonisolated final class ReplyOnce<T>: @unchecked Sendable {
     private let lock = NSLock()
     private var done = false
     private let onResume: (T) -> Void

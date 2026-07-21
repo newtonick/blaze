@@ -23,8 +23,17 @@ struct SettingsView: View {
             LabeledContent("Privileged helper") {
                 switch model.helper.status {
                 case .enabled:
-                    Label("Installed", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                    HStack(spacing: 8) {
+                        Label("Installed", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        // Registered but refusing to run is a real state — a
+                        // launchd record left stale by an app update — and
+                        // re-registering is the only repair.
+                        Button("Reinstall…") {
+                            Task { await model.helper.reinstall() }
+                        }
+                        .controlSize(.small)
+                    }
                 case .requiresApproval:
                     Button("Approve in System Settings…") { model.helper.openApprovalSettings() }
                 default:
